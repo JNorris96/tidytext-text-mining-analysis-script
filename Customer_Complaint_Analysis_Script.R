@@ -1,13 +1,13 @@
 ##### Analyze any Sub-Category in Customer Complaint Data ################################################################################
-##### Taylor Axelson & Jake Norris #######################################################################################################
+##### Taylor Axelson & Jacob Norris ######################################################################################################
 ##### 12/11/2018 #########################################################################################################################
 
-#### Edit This Variable to Change Sub-Category - DONT FORGET TO CREATE A TOP 10 WORD LIST AT LINE 230 ####################################
+#### Edit This Variable to Change Sub-Category - DONT FORGET TO CREATE A TOP 10 WORD LIST AT LINE 222 ####################################
 
 subcategory <<- "HIGHBILL"
 
 #### LIBRARIES  and WORKING DIRECTORY - This section should be ran every time the script runs. ###########################################
-setwd("V:/Customer Support Services/zz_Customer Service Analyst/Cornell Project") #Be sure to put the data file you want to analyze in this directory.
+setwd("V:/Customer Support Services/zz_Customer Service Analyst/Cornell Project") #Be sure to put the data file you want to analyze in this directory. Make sure it is a CSV!
 
 library(babynames)
 library(dplyr)
@@ -27,14 +27,14 @@ library(rmarkdown)
 stop_names <- babynames::babynames                      #Create data frame to block names
 stop_names <- stop_names[, -c(1:2, 4:5)]                #Delete all columns except "Name" 
 colnames(stop_names)[1] <- "CaseComments"               #Rename "Name" column to "CaseComments" column
-stop_names$CaseComments <- tolower(stop_names$CaseComments)
+stop_names$CaseComments <- tolower(stop_names$CaseComments) #Make "Name" column values lowercase
 
 data(stop_words)                                        #Pull "stop_words" from tidytext library
-stop_words$lexicon <- NULL                              #Nullify "stop_words" "lexicon" column
+stop_words$lexicon <- NULL                              #Nullify "lexicon" column in "stop_words" 
 colnames(stop_words)[1] <- "CaseComments"               #Rename "Word" column to "CaseComments" column
 
-master_stop <<- unique(rbind(stop_words, stop_names))   #Combine "stop_words" and "stop_names" on "CaseComments" column 
-rm(stop_names, stop_words)            
+master_stop <<- unique(rbind(stop_words, stop_names))   #Combine "stop_words" and "stop_names" on "CaseComments" column and delete duplicate words
+rm(stop_names, stop_words)                              #Delete unnecessary variables 
 
 
 
@@ -42,9 +42,9 @@ rm(stop_names, stop_words)
 #### This section needs a CSV in which the text data that needs to be analyzed is labeled "CaseComments"
 feedback <- read_csv("Copy of CCB Customer Feedback.csv")   # Read in the data file as a CSV
 
-feedback <<- feedback %>%                                   # Separate each word by a space and put them on their own line, filter out unnnecessary words with master_stop 
+feedback <<- feedback %>%                                   # Separate each word by a space and put them on their own line
   unnest_tokens(CaseComments, "CaseComments", token = stringr::str_split, pattern = " ") %>%
-  anti_join(master_stop)
+  anti_join(master_stop)                                    # Filter out unnnecessary words
 
 # bestcall_BB <- read_csv("Best Practices Call BB.csv")
 # 
@@ -58,28 +58,28 @@ feedback <<- feedback %>%                                   # Separate each word
 bigram_creator <- function(x, y)
 {
   x_bigram_feedback <- y %>%		
-		  filter(`Sub Topic 2` == x)
+		  filter(`Sub Topic 2` == x)                                        # Filter feedback by subcategory
   
 	x_bigram_feedback <- x_bigram_feedback %>%
-  		unnest_tokens(bigram, 'CaseComments', token = "ngrams", n=3)
+  		unnest_tokens(bigram, 'CaseComments', token = "ngrams", n=3)      # Break case comments into word pairs 
 
 	x_bigram_feedback <- x_bigram_feedback %>%
-		  separate(bigram, c("word1", "word2", sep=" "))
+		  separate(bigram, c("word1", "word2", sep=" "))                    # Make bigram into 2 word columns 
 
-	x_bigram_feedback <- x_bigram_feedback %>%
+	x_bigram_feedback <- x_bigram_feedback %>%                            # Filter unnecessary words by master_stop
   		filter(!word1 %in% master_stop$CaseComments) %>%
   		filter(!word2 %in% master_stop$CaseComments)
 
-	x_bigram_feedback <- x_bigram_feedback %>%
+	x_bigram_feedback <- x_bigram_feedback %>%                            # Combine both word columns into one column called Bigram
   		unite(bigram, word1, word2, sep=" ")
 	
-	x_bigram_feedback <- as.data.frame(x_bigram_feedback)
+	x_bigram_feedback <- as.data.frame(x_bigram_feedback)                 # Cast this variable as a data frame
 	
-	return(x_bigram_feedback)
+	return(x_bigram_feedback)                                             
 
 }
 
-subcategory_bigram_feedback <<- bigram_creator(subcategory, feedback)
+subcategory_bigram_feedback <<- bigram_creator(subcategory, feedback)   # Assign the return of the function as a global variable
 
 
 #### CREATE SENTIMENT FEEDBACK ###########################################################################################################
@@ -87,49 +87,49 @@ subcategory_bigram_feedback <<- bigram_creator(subcategory, feedback)
 sentiment_creator <- function(x, y)
 {
 	sentiment_feedback <- y %>%
-  		unnest_tokens(word, 'CaseComments')
+  		unnest_tokens(word, 'CaseComments')                               # Separate CaseComments into a new column called "word"
 
 	sentiment_feedback <- sentiment_feedback %>%
-		mutate(date = mdy(`Date Opened`)) %>%
-		mutate_at(vars(date), funs(year,month,day))
+		mutate(date = mdy(`Date Opened`)) %>% 
+		mutate_at(vars(date), funs(year,month,day))                         # Use year month date to make `Date Opened`
 
-	sentiment_feedback$Month_Yr <- as.yearmon(paste(sentiment_feedback$year, sentiment_feedback$month, sep = "-"))
+	sentiment_feedback$Month_Yr <- as.yearmon(paste(sentiment_feedback$year, sentiment_feedback$month, sep = "-"))  # Use year and month 
 
 	sentiment_feedback <- sentiment_feedback %>%
-  		filter(`Sub Topic 2` == x)
+  		filter(`Sub Topic 2` == x)                                        # Filter feedback by subcategory
 
 	return(x_NRC_sentiment_feedback <- sentiment_feedback %>%
-  		inner_join(get_sentiments("nrc")))
+  		inner_join(get_sentiments("nrc")))                                # Add NRC sentiment lexicon from TidyText package to correlating words
 
 }
 
-subcategory_NRC_sentiment_feedback <<- sentiment_creator(subcategory, feedback)
+subcategory_NRC_sentiment_feedback <<- sentiment_creator(subcategory, feedback)   # Assign the return of the function as a global variable
 
 
 #### Top 15 BIGRAM COUNTER - Creates a plot that counts how many times the top 15 bigrams appear for chosen sub-category #################
 bigram_count_plot_creator <- function(x, y)
 {
   x_bigram_feedback_sorted <- x %>%
-    count(bigram, sort = TRUE)
+    count(bigram, sort = TRUE)                                          # Count the bigrams 
   
-  return(x_top_bigrams_plot <- ggplot(x_bigram_feedback_sorted[1:15, ], aes(x = reorder(bigram, +n), y = n, label = n)) +
+  return(x_top_bigrams_plot <- ggplot(x_bigram_feedback_sorted[1:15, ], aes(x = reorder(bigram, +n), y = n, label = n)) + 
            geom_bar(fill = "#003366", stat="identity") +
            geom_label(size = 3) +
            coord_flip() +
-           labs(title = "Frequent Word Pairs", subtitle = paste("in", y, sep = " "), x = ("Bigram"), y = ("Count")) +
-           theme_classic())
+           labs(title = "Frequent Word Pairs", subtitle = paste("in", y, sep = " "), x = ("Bigram"), y = ("Count")) + 
+           theme_classic())       # This ggplot makes a bar graph of the bigrams with the highest count and labels the bars with the count 
   
 }
 
-subcategory_top_bigrams_plot <<- bigram_count_plot_creator(subcategory_bigram_feedback, subcategory)
+subcategory_top_bigrams_plot <<- bigram_count_plot_creator(subcategory_bigram_feedback, subcategory)    # Assign the return of the function as a global variable
 
-subcategory_top_bigrams_plot
+subcategory_top_bigrams_plot  # Display the plot
 
 
 #### FREQUENT LOCATION CALLS - Creates a plot that shows the cities with most call-ins ###################################################
 top_locations_creator <- function(x, y)
 {
-  x <- data.frame(table(x$City)) 
+  x <- data.frame(table(x$City))  # Cast the table made out of the feedback's city columns into a data frame
   
   return(top_n(x, n = 15, Freq) %>%
            ggplot(aes(x = reorder(Var1, +Freq), y = Freq, label = Freq)) +
@@ -139,13 +139,13 @@ top_locations_creator <- function(x, y)
            xlab("City")+
            ylab("Count")+
            theme_classic()+
-           coord_flip())
+           coord_flip())      # This ggplot makes a bar graph that counts the citys with the most calls and labels the bars with the count
   
 }
 
-subcategory_top_locations_plot <<- top_locations_creator(subcategory_bigram_feedback, subcategory)
+subcategory_top_locations_plot <<- top_locations_creator(subcategory_bigram_feedback, subcategory)    # Assign the return of the function as a global variable
 
-subcategory_top_locations_plot
+subcategory_top_locations_plot  # Display the plot
 
 
 #### FILTER, REMOVE COMMON WORDS, & COUNT WORDS ##########################################################################################
@@ -154,7 +154,7 @@ subcategory_top_locations_plot
 wordcount_creator <- function(x, y)
 {
   x_wordcount <- y %>%
-    filter(`Sub Topic 2` == x)
+    filter(`Sub Topic 2` == x)                          # Filter feedback by subcategory                                          
   
   x_wordcount <- x_wordcount %>%
     filter(!str_detect(CaseComments, "[0-9]"),
@@ -172,14 +172,14 @@ wordcount_creator <- function(x, y)
            CaseComments!= "adv",
            CaseComments!= "ave",
            CaseComments!= "callback",
-           CaseComments!= "stated")
+           CaseComments!= "stated")                     # This function filters additional words out of the data set                 
   
   return(x_wordcount <- x_wordcount %>%
-           count(CaseComments, sort=TRUE))
+           count(CaseComments, sort=TRUE))              # Counts the words in CaseComments column
   
 }
 
-subcategory_wordcount <<- wordcount_creator(subcategory, feedback)
+subcategory_wordcount <<- wordcount_creator(subcategory, feedback)                # Assign the return of the function as a global variable 
 
 
 ##### This function to be used with text files with greater than 1000 words ##############################################################
@@ -212,9 +212,9 @@ wordcount_smallplot_creator <- function(x, y)
 
 
 ##### Edit method call, SPECIFY IF USING "wordcount_largeplot_creator" or "wordcount_smallplot_creator" ##################################
-subcategory_wordcount_plot <<- wordcount_largeplot_creator(subcategory_wordcount, subcategory)
+subcategory_wordcount_plot <<- wordcount_largeplot_creator(subcategory_wordcount, subcategory)  # Assign the return of the function as a global variable
 
-subcategory_wordcount_plot
+subcategory_wordcount_plot  # Display the plot
 
 
 #### TOP TEN WORDS #######################################################################################################################
@@ -239,19 +239,19 @@ subcategory_wordcount_t10 <<- subcategory_wordcount %>%
 wordcount_top10_creator <- function(x, y)
 {
   return(x %>%
-           mutate(CaseComments = reorder(CaseComments, n)) %>%
+           mutate(CaseComments = reorder(CaseComments, n)) %>%        # Takes the CaseComments and sorts by n (Count)
            ggplot(aes(CaseComments, n, label = n)) +
            geom_col(fill = "#003366")+
            geom_label(size = 3)+
-           labs(title = "Custom Top 10 Words Count", subtitle = paste("in", y, sep = " "), x = ("Word"), y = ("Count"))+
-           theme_classic()+
+           labs(title = "Custom Top 10 Words Count", subtitle = paste("in", y, sep = " "), x = ("Word"), y = ("Count"))+ 
+           theme_classic()+ 
            coord_flip())
   
 }
 
-subcategory_wordcount_plot_t10 <<- wordcount_top10_creator(subcategory_wordcount_t10, subcategory)
+subcategory_wordcount_plot_t10 <<- wordcount_top10_creator(subcategory_wordcount_t10, subcategory)  # Assign the return of the function as a global variable
 
-subcategory_wordcount_plot_t10
+subcategory_wordcount_plot_t10  # Display the plot
 
 
 #### PLOT NRC SENTIMENT CHART ############################################################################################################
@@ -260,7 +260,7 @@ nrc_sentiment_spectrum_creator <- function(x, y)
   x_NRC_spectrum <- x %>%
     group_by(sentiment = factor(sentiment, levels =c("fear","anger","disgust","sadness",
                                                      "negative","anticipation","surprise",
-                                                     "positive","joy","trust"))) %>%
+                                                     "positive","joy","trust"))) %>%           # This custom sorts the sentiment groups, the order was recommended to script authors by an anthropology major
     count(word, sort = TRUE) %>%
     arrange(desc(n)) %>%
     slice(seq_len(5)) %>%
@@ -298,13 +298,13 @@ nrc_sentiment_spectrum_creator <- function(x, y)
            facet_grid(~ sentiment) +
            labs(title = "Sentiment Spectrum", subtitle = paste("in", y, sep = " "), x = NULL, y = NULL)+
            coord_flip()+
-           guides(fill=FALSE))
+           guides(fill=FALSE))                # Sort the sentiment groups and organizes words into sentiment groups and colors their boxes in a red-green gradient
   
 }
 
-subcategory_NRC_spectrum <<- nrc_sentiment_spectrum_creator(subcategory_NRC_sentiment_feedback, subcategory)
+subcategory_NRC_spectrum <<- nrc_sentiment_spectrum_creator(subcategory_NRC_sentiment_feedback, subcategory)  # Assign the return of the function as a global variable
 
-subcategory_NRC_spectrum
+subcategory_NRC_spectrum  # Display the plot
 
 
 #### PLOT NRC SENTIMENT ##################################################################################################################
@@ -321,12 +321,12 @@ sentiments_group_plot_creator <- function(x, y)
            theme_classic() +
            coord_flip() +
            labs(title = "Sentiment Group Distribution", subtitle = paste("in", y, sep = " "), x="Sentiment Group", y="Word Count") +
-           guides(fill=FALSE))
+           guides(fill=FALSE))              
 }
 
-subcategory_sentiments_group_plot <<- sentiments_group_plot_creator(subcategory_NRC_sentiment_feedback, subcategory)
+subcategory_sentiments_group_plot <<- sentiments_group_plot_creator(subcategory_NRC_sentiment_feedback, subcategory)  # Assign the return of the function as a global variable
 
-subcategory_sentiments_group_plot
+subcategory_sentiments_group_plot  # Display the plot
 
 
 #### FILTER - NEG SENTIMENT ##############################################################################################################
@@ -337,11 +337,11 @@ only_negative_sentiments <- function(x)
                     sentiment == "sadness" |
                     sentiment == "anticipation"|
                     sentiment == "anger"|
-                    sentiment == "disgust"))
+                    sentiment == "disgust"))       # Filters out postive sentiments for the next two plots
   
 }
 
-subcategory_only_negative_sentiments <<- only_negative_sentiments(subcategory_NRC_sentiment_feedback)
+subcategory_only_negative_sentiments <<- only_negative_sentiments(subcategory_NRC_sentiment_feedback)  # Assign the return of the function as a global variable
 
 
 #### PLOT NRC SENTIMENT - TIME SERIES ####################################################################################################
@@ -360,9 +360,9 @@ negative_sentiments_over_time_plot_creator <- function(x, y)
     
 }
 
-subcategory_negative_sentiments_over_time <<- negative_sentiments_over_time_plot_creator(subcategory_only_negative_sentiments, subcategory)
+subcategory_negative_sentiments_over_time <<- negative_sentiments_over_time_plot_creator(subcategory_only_negative_sentiments, subcategory)  # Assign the return of the function as a global variable
 
-subcategory_negative_sentiments_over_time
+subcategory_negative_sentiments_over_time  # Display the plot
 
 
 #### PLOT NRC SENTIMENT - NEG - YEAR #####################################################################################################
@@ -383,7 +383,7 @@ negative_sentiments_per_year_plot_creator <- function(x, y)
     
 }
 
-subcategory_negative_sentiments_per_year_plot <<- negative_sentiments_per_year_plot_creator(subcategory_only_negative_sentiments, subcategory)
+subcategory_negative_sentiments_per_year_plot <<- negative_sentiments_per_year_plot_creator(subcategory_only_negative_sentiments, subcategory)  # Assign the return of the function as a global variable
 
-subcategory_negative_sentiments_per_year_plot
+subcategory_negative_sentiments_per_year_plot  # Display the plot
 
